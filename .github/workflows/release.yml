@@ -1,0 +1,102 @@
+# Build static musl binaries of `comeow` for x86_64 and arm64 using `cross`,
+# and (on a version tag) publish them as a DRAFT GitHub Release.
+#
+#   • push to main / PRs    → build + upload artifacts to the run (download to test)
+#   • push a tag `v*`       → build + create a DRAFT GitHub Release with the binaries
+#   • manual (Run workflow) → build + upload artifacts
+#
+# `cross` is the right tool here: it cross-compiles inside per-target Docker
+# images with the musl toolchain pre-installed, so we don't manage linkers or
+# sysroots ourselves. Both backends (SocketCAN + gs_usb) are pure-Rust, so the
+# musl static builds need no C dependencies.
+
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Needed for the tag-triggered GitHub Release.
+permissions:
+  contents: write
+
+env:
+  BIN: comeow
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Default feature `socketcan` plus `gs_usb` → one binary that supports
+      # both a Linux SocketCAN interface and a candleLight USB adapter.
+      - name: Build
+        run: cross build --release --locked --features gs_usb --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          dist="${BIN}-${{ matrix.target }}"
+          mkdir -p "$dist"
+          cp "target/${{ matrix.target }}/release/${BIN}" "$dist/"
+          cp README.md "$dist/"
+          tar -czf "${dist}.tar.gz" "$dist"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN }}-${{ matrix.target }}
+          path: ${{ env.BIN }}-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: comeow ${{ github.ref_name }}
+          files: artifacts/*.tar.gz
+          body: |
+            Static musl builds of `comeow` (CANopen SDO client).
+
+            | Target | Archive |
+            |--------|---------|
+            | x86-64 | `comeow-x86_64-unknown-linux-musl.tar.gz` |
+            | arm64  | `comeow-aarch64-unknown-linux-musl.tar.gz` |
+
+            Each archive contains the statically-linked `comeow` binary built
+            with both backends (SocketCAN + gs_usb). No runtime dependencies.

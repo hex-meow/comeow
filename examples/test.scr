@@ -1,0 +1,10 @@
+# Example SDO script. Run with:  comeow --socketcan vcan0 -f examples/test.scr
+set node 5
+
+r 0x1018 0 u8        # highest sub-index
+r 0x1017 0 u16       # heartbeat time
+r 0x1000 0 x32       # device type, hex
+r 0x1018 0           # no datatype -> raw hex
+sleep 200
+w 0x1017 0 u16 500   # write heartbeat
+r 0x6041 0 u16       # unknown object -> abort

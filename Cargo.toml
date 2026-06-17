@@ -1,0 +1,37 @@
+[package]
+name = "hex-meow-canopen-sdo-client"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Human-friendly CANopen SDO client for debugging (CiA 309-style shell)."
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "comeow"
+path = "src/main.rs"
+
+[dependencies]
+canopen-sdo = { version = "0.1.1", default-features = false, features = ["tokio"] }
+can-transport = { version = "0.1.1" }
+
+rustyline = "14"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+thiserror = "1"
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
+
+[features]
+# socketcan is the default backend (Linux). gs_usb is opt-in cross-platform USB.
+default = ["socketcan"]
+socketcan = ["can-transport/socketcan"]
+gs_usb = ["can-transport/gs_usb"]
+
+# For local development against sibling checkouts of `can-transport` /
+# `canopen-sdo`, see `.cargo/config.toml` (git-ignored). The published
+# crates.io versions above are what CI and `cargo install` use.
+
+[profile.release]
+strip = true
+lto = true
