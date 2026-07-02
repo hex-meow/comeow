@@ -187,6 +187,14 @@ fn parse_hex_bytes(s: &str) -> Result<Vec<u8>, ValueError> {
     // Accept "DE AD BE EF", "de ad", or a contiguous "deadbeef".
     let compact: String = s.split_whitespace().collect();
     let compact = compact.strip_prefix("0x").unwrap_or(&compact);
+    // Guard before byte-slicing: multibyte input (e.g. full-width ＤＥＡＤ from a
+    // CJK IME) would otherwise panic on a char boundary inside `compact[i..i+2]`.
+    if !compact.is_ascii() {
+        return Err(ValueError::Hex(
+            s.to_string(),
+            "only ASCII hex digits allowed".into(),
+        ));
+    }
     if compact.len() % 2 != 0 {
         return Err(ValueError::Hex(
             s.to_string(),
@@ -278,6 +286,14 @@ mod tests {
     fn hex_bytes() {
         assert_eq!(encode(DataType::HexBytes, "DE AD BE EF").unwrap(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
         assert_eq!(encode(DataType::HexBytes, "deadbeef").unwrap(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
+    }
+
+    #[test]
+    fn hex_bytes_non_ascii_rejected() {
+        // Full-width IME digits and mixed multibyte input must error, not panic
+        // on a char-boundary slice.
+        assert!(encode(DataType::HexBytes, "ＤＥＡＤ").is_err());
+        assert!(encode(DataType::HexBytes, "aあ").is_err());
     }
 
     #[test]
