@@ -10,6 +10,10 @@ license = "MIT OR Apache-2.0"
 name = "comeow"
 path = "src/main.rs"
 
+[[example]]
+name = "mock_node"
+required-features = ["socketcan"]
+
 [dependencies]
 canopen-sdo = { version = "0.1.1", default-features = false, features = ["tokio"] }
 can-transport = { version = "0.1.1" }
